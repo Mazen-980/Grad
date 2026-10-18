@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cow Detection System</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">◼</span>
+    <div>
+      <h1>Cow Detection System</h1>
+      <p class="sub">YOLO detection + ByteTrack/BoT-SORT tracking · prototype</p>
+    </div>
+  </div>
+  <div class="picker">
+    <label for="videoSelect">Video</label>
+    <select id="videoSelect"></select>
+  </div>
+</header>
+
+<div id="banner" class="banner hidden"></div>
+
+<main class="grid">
+  <!-- A. Video viewer -->
+  <section class="card viewer">
+    <div class="card-head">
+      <h2>Video viewer</h2>
+      <div class="toggles">
+        <label class="switch"><input type="checkbox" id="tOverlay" checked><span>Overlays</span></label>
+        <label class="switch"><input type="checkbox" id="tLabels" checked><span>Labels</span></label>
+        <select id="rate" title="Playback speed">
+          <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option><option value="2">2×</option>
+        </select>
+      </div>
+    </div>
+    <div class="stage" id="stage">
+      <video id="video" controls playsinline preload="metadata"></video>
+      <canvas id="overlay"></canvas>
+      <div id="stageMsg" class="stage-msg hidden"></div>
+      <div id="frameBadge" class="frame-badge hidden"></div>
+    </div>
+    <div class="transport">
+      <button id="bPlay" class="btn">▶ Play</button>
+      <button id="bBack" class="btn ghost" title="Back one frame">⟨ frame</button>
+      <button id="bFwd" class="btn ghost" title="Forward one frame">frame ⟩</button>
+      <input type="range" id="seek" min="0" max="1000" value="0" step="1">
+      <span id="timeLbl" class="mono">00:00.0 / 00:00.0</span>
+    </div>
+    <p class="source-note" id="sourceNote">No detections loaded for this video yet — run detection or pick a previous run.</p>
+  </section>
+
+  <!-- B. Live statistics -->
+  <section class="card stats">
+    <div class="card-head"><h2>Live statistics</h2><span class="pill" id="srcPill">no data</span></div>
+    <div class="tiles">
+      <div class="tile big"><div class="lbl">Cows visible now</div><div class="val" id="sVisible">–</div></div>
+      <div class="tile big"><div class="lbl">Unique track IDs <span class="hint" title="IDs seen up to the playhead / whole video. IDs can change after occlusion or re-entry, so this over-counts real animals.">ⓘ</span></div><div class="val" id="sUnique">–</div><div class="foot" id="sStable"></div></div>
+      <div class="tile"><div class="lbl">Avg confidence (frame)</div><div class="val" id="sConf">–</div><div class="foot" id="sConfAll"></div></div>
+      <div class="tile"><div class="lbl">Processing speed</div><div class="val" id="sFps">–</div><div class="foot" id="sInfer"></div></div>
+      <div class="tile wide"><div class="lbl">File</div><div class="val small" id="sFile">–</div><div class="foot" id="sMeta"></div></div>
+      <div class="tile wide"><div class="lbl">Position / duration</div><div class="val small mono" id="sPos">–</div></div>
+    </div>
+    <p class="note">Visible count = boxes in the current frame after NMS (each cow counted once per frame). Track IDs are not identities: they can change when a cow is occluded, overlaps another, or leaves and re-enters the frame.</p>
+  </section>
+
+  <!-- D. Processing -->
+  <section class="card processing">
+    <div class="card-head"><h2>Video processing</h2><span class="pill" id="jobPill">idle</span></div>
+    <div class="form">
+      <label>Model<select id="pModel"></select></label>
+      <label>Tracker<select id="pTracker">
+        <option value="botsort" selected>BoT-SORT + ReID (recommended)</option><option value="bytetrack">ByteTrack</option><option value="none">None (detect only)</option>
+      </select></label>
+      <label>Confidence <output id="oConf">0.35</output><input type="range" id="pConf" min="0.05" max="0.95" step="0.05" value="0.35"></label>
+      <label>IoU (NMS) <output id="oIou">0.50</output><input type="range" id="pIou" min="0.2" max="0.9" step="0.05" value="0.5"></label>
+      <label>Image size<select id="pImgsz"><option>640</option><option selected>960</option><option>1280</option></select></label>
+      <label>Process every Nth frame<input type="number" id="pStride" min="1" max="30" value="1"></label>
+      <label>Limit to first N seconds<input type="number" id="pMax" min="0" step="5" placeholder="whole video"></label>
+      <label>ID memory (seconds a hidden cow keeps its ID)<input type="number" id="pMemory" min="1" max="120" value="8"></label>
+      <label class="check"><input type="checkbox" id="pRelink" checked> Re-link broken IDs after processing (and split ID switches)</label>
+      <label class="check"><input type="checkbox" id="pExport" checked> Export annotated video</label>
+    </div>
+    <div class="actions">
+      <button id="bStart" class="btn primary">Start detection</button>
+      <button id="bStop" class="btn danger" disabled>Stop</button>
+    </div>
+    <div class="progress"><div id="progBar"></div></div>
+    <div class="prog-meta mono" id="progMeta"></div>
+    <div class="live-preview hidden" id="livePrevWrap">
+      <div class="lbl">Live inference preview (frame currently being processed)</div>
+      <img id="livePrev" alt="Latest processed frame">
+    </div>
+  </section>
+
+  <!-- C. Detection results -->
+  <section class="card results">
+    <div class="card-head">
+      <h2>Detection results</h2>
+      <select id="runSelect" title="Previous runs for this video"></select>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-title">Visible cows over time <span class="hint">(click to seek)</span></div>
+      <canvas id="chart" height="180"></canvas>
+    </div>
+    <div class="summary-row" id="summaryRow"></div>
+    <div class="downloads" id="downloads"></div>
+    <div class="table-wrap">
+      <table id="tracksTbl">
+        <thead><tr><th>ID</th><th>First seen</th><th>Last seen</th><th>Frames</th><th>Mean conf.</th><th title="Raw tracker IDs joined into this ID by re-linking">Fragments</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>All boxes, counts and confidences shown come from real YOLO model inference on the selected video. Nothing is simulated.</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

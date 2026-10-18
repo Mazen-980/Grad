@@ -1,0 +1,249 @@
+{
+  "run_id": "20261011-142549_yolo11m",
+  "video": "WhatsApp Video 2026-09-29 at 20.49.57 (3).mp4",
+  "status": "done",
+  "error": null,
+  "created": "2026-10-11T14:26:21",
+  "detection_source": "real model inference (Ultralytics YOLO)",
+  "settings": {
+    "model": "yolo11m.pt",
+    "conf": 0.35,
+    "iou": 0.5,
+    "imgsz": 960,
+    "stride": 1,
+    "tracker": "bytetrack",
+    "device": "auto",
+    "export_video": true,
+    "min_track_frames": 5,
+    "max_seconds": null
+  },
+  "meta": {
+    "path": "/Users/mazenahmad/Downloads/Grad/WhatsApp Video 2026-09-29 at 20.49.57 (3).mp4",
+    "name": "WhatsApp Video 2026-09-29 at 20.49.57 (3).mp4",
+    "readable": true,
+    "error": null,
+    "width": 1024,
+    "height": 576,
+    "fps": 23.952,
+    "frames": 504,
+    "duration": 21.042,
+    "codec": "h264",
+    "device": "mps",
+    "cow_classes": [
+      "cow"
+    ]
+  },
+  "stats": {
+    "frames_read": 504,
+    "frames_processed": 504,
+    "frames_with_cows": 504,
+    "max_visible": 6,
+    "mean_visible": 3.815,
+    "median_visible": 4.0,
+    "total_detections": 1923,
+    "avg_conf": 0.7641,
+    "unique_ids": 19,
+    "stable_ids": 15,
+    "processing_fps": 16.87,
+    "avg_inference_ms": 46.1,
+    "elapsed_s": 30.2
+  },
+  "tracks": [
+    {
+      "id": 1,
+      "first_t": 0.0,
+      "last_t": 21.0,
+      "first_frame": 0,
+      "last_frame": 503,
+      "frames": 441,
+      "mean_conf": 0.728,
+      "max_conf": 0.9078
+    },
+    {
+      "id": 2,
+      "first_t": 0.0,
+      "last_t": 3.716,
+      "first_frame": 0,
+      "last_frame": 89,
+      "frames": 65,
+      "mean_conf": 0.7172,
+      "max_conf": 0.8937
+    },
+    {
+      "id": 3,
+      "first_t": 0.0,
+      "last_t": 21.0,
+      "first_frame": 0,
+      "last_frame": 503,
+      "frames": 500,
+      "mean_conf": 0.8279,
+      "max_conf": 0.9445
+    },
+    {
+      "id": 4,
+      "first_t": 0.0,
+      "last_t": 21.0,
+      "first_frame": 0,
+      "last_frame": 503,
+      "frames": 503,
+      "mean_conf": 0.8152,
+      "max_conf": 0.9346
+    },
+    {
+      "id": 5,
+      "first_t": 0.084,
+      "last_t": 0.96,
+      "first_frame": 2,
+      "last_frame": 23,
+      "frames": 22,
+      "mean_conf": 0.506,
+      "max_conf": 0.5931
+    },
+    {
+      "id": 6,
+      "first_t": 0.96,
+      "last_t": 1.628,
+      "first_frame": 23,
+      "last_frame": 39,
+      "frames": 15,
+      "mean_conf": 0.5884,
+      "max_conf": 0.7908
+    },
+    {
+      "id": 8,
+      "first_t": 1.712,
+      "last_t": 1.712,
+      "first_frame": 41,
+      "last_frame": 41,
+      "frames": 1,
+      "mean_conf": 0.4044,
+      "max_conf": 0.4044
+    },
+    {
+      "id": 10,
+      "first_t": 3.131,
+      "last_t": 4.092,
+      "first_frame": 75,
+      "last_frame": 98,
+      "frames": 8,
+      "mean_conf": 0.5032,
+      "max_conf": 0.6164
+    },
+    {
+      "id": 11,
+      "first_t": 5.636,
+      "last_t": 7.473,
+      "first_frame": 135,
+      "last_frame": 179,
+      "frames": 10,
+      "mean_conf": 0.4785,
+      "max_conf": 0.6201
+    },
+    {
+      "id": 12,
+      "first_t": 7.056,
+      "last_t": 7.64,
+      "first_frame": 169,
+      "last_frame": 183,
+      "frames": 8,
+      "mean_conf": 0.4227,
+      "max_conf": 0.5344
+    },
+    {
+      "id": 13,
+      "first_t": 7.181,
+      "last_t": 7.766,
+      "first_frame": 172,
+      "last_frame": 186,
+      "frames": 7,
+      "mean_conf": 0.4644,
+      "max_conf": 0.5911
+    },
+    {
+      "id": 14,
+      "first_t": 7.515,
+      "last_t": 20.959,
+      "first_frame": 180,
+      "last_frame": 502,
+      "frames": 290,
+      "mean_conf": 0.7285,
+      "max_conf": 0.8732
+    },
+    {
+      "id": 15,
+      "first_t": 8.434,
+      "last_t": 9.018,
+      "first_frame": 202,
+      "last_frame": 216,
+      "frames": 9,
+      "mean_conf": 0.6402,
+      "max_conf": 0.7854
+    },
+    {
+      "id": 16,
+      "first_t": 8.517,
+      "last_t": 8.517,
+      "first_frame": 204,
+      "last_frame": 204,
+      "frames": 1,
+      "mean_conf": 0.3747,
+      "max_conf": 0.3747
+    },
+    {
+      "id": 17,
+      "first_t": 9.352,
+      "last_t": 9.603,
+      "first_frame": 224,
+      "last_frame": 230,
+      "frames": 5,
+      "mean_conf": 0.4913,
+      "max_conf": 0.5789
+    },
+    {
+      "id": 20,
+      "first_t": 9.728,
+      "last_t": 10.646,
+      "first_frame": 233,
+      "last_frame": 255,
+      "frames": 23,
+      "mean_conf": 0.6843,
+      "max_conf": 0.8418
+    },
+    {
+      "id": 26,
+      "first_t": 11.774,
+      "last_t": 11.815,
+      "first_frame": 282,
+      "last_frame": 283,
+      "frames": 2,
+      "mean_conf": 0.5539,
+      "max_conf": 0.6185
+    },
+    {
+      "id": 29,
+      "first_t": 13.485,
+      "last_t": 14.07,
+      "first_frame": 323,
+      "last_frame": 337,
+      "frames": 12,
+      "mean_conf": 0.3915,
+      "max_conf": 0.4456
+    },
+    {
+      "id": 30,
+      "first_t": 19.581,
+      "last_t": 19.581,
+      "first_frame": 469,
+      "last_frame": 469,
+      "frames": 1,
+      "mean_conf": 0.3853,
+      "max_conf": 0.3853
+    }
+  ],
+  "files": {
+    "detections_csv": "outputs/WhatsApp_Video_2026-09-29_at_20_49_57_3/20261011-142549_yolo11m/detections.csv",
+    "frame_counts_csv": "outputs/WhatsApp_Video_2026-09-29_at_20_49_57_3/20261011-142549_yolo11m/frame_counts.csv",
+    "detections_json": "outputs/WhatsApp_Video_2026-09-29_at_20_49_57_3/20261011-142549_yolo11m/detections.json",
+    "annotated_video": "outputs/WhatsApp_Video_2026-09-29_at_20_49_57_3/20261011-142549_yolo11m/annotated.mp4"
+  }
+}

@@ -1,0 +1,537 @@
+{
+  "run_id": "20261011-170551_yolo11m",
+  "video": "WhatsApp Video 2026-09-29 at 8.45.20 PM (2).mp4",
+  "status": "done",
+  "error": null,
+  "created": "2026-10-11T17:07:36",
+  "detection_source": "real model inference (Ultralytics YOLO)",
+  "settings": {
+    "model": "yolo11m.pt",
+    "conf": 0.35,
+    "iou": 0.5,
+    "imgsz": 960,
+    "stride": 1,
+    "tracker": "botsort",
+    "track_memory_s": 8.0,
+    "relink": true,
+    "device": "auto",
+    "export_video": false,
+    "min_track_frames": 5,
+    "max_seconds": 60.0
+  },
+  "meta": {
+    "path": "/Users/mazenahmad/Downloads/Grad/WhatsApp Video 2026-09-29 at 8.45.20 PM (2).mp4",
+    "name": "WhatsApp Video 2026-09-29 at 8.45.20 PM (2).mp4",
+    "readable": true,
+    "error": null,
+    "width": 1920,
+    "height": 1080,
+    "fps": 15.0,
+    "frames": 4100,
+    "duration": 273.331,
+    "codec": "hevc",
+    "device": "mps",
+    "cow_classes": [
+      "cow"
+    ]
+  },
+  "stats": {
+    "frames_read": 900,
+    "frames_processed": 900,
+    "frames_with_cows": 900,
+    "max_visible": 15,
+    "mean_visible": 11.56,
+    "median_visible": 12.0,
+    "total_detections": 10404,
+    "avg_conf": 0.7236,
+    "unique_ids": 43,
+    "stable_ids": 39,
+    "unique_ids_before_relink": 49,
+    "processing_fps": 8.87,
+    "avg_inference_ms": 88.9,
+    "elapsed_s": 101.5
+  },
+  "relink": {
+    "raw_ids": 49,
+    "linked_ids": 43,
+    "merges": 6,
+    "threshold": 0.9778,
+    "spatial_threshold": 0.9247,
+    "negative_pairs": 507,
+    "switch_splits": [
+      {
+        "raw_id": 1,
+        "at_frame": 49,
+        "at_s": 3.27,
+        "similarity": 0.893,
+        "threshold": 0.898,
+        "box_jump": 0.24,
+        "new_segment": 58
+      },
+      {
+        "raw_id": 7,
+        "at_frame": 159,
+        "at_s": 10.6,
+        "similarity": 0.896,
+        "threshold": 0.898,
+        "box_jump": 0.27,
+        "new_segment": 59
+      },
+      {
+        "raw_id": 10,
+        "at_frame": 24,
+        "at_s": 1.6,
+        "similarity": 0.81,
+        "threshold": 0.898,
+        "box_jump": 0.26,
+        "new_segment": 60
+      },
+      {
+        "raw_id": 30,
+        "at_frame": 240,
+        "at_s": 16.0,
+        "similarity": 0.84,
+        "threshold": 0.898,
+        "box_jump": 0.32,
+        "new_segment": 61
+      }
+    ]
+  },
+  "tracks": [
+    {
+      "id": 1,
+      "first_t": 0.0,
+      "last_t": 3.2,
+      "first_frame": 0,
+      "last_frame": 48,
+      "frames": 49,
+      "mean_conf": 0.7792,
+      "max_conf": 0.9406
+    },
+    {
+      "id": 2,
+      "first_t": 0.0,
+      "last_t": 6.2,
+      "first_frame": 0,
+      "last_frame": 93,
+      "frames": 93,
+      "mean_conf": 0.8851,
+      "max_conf": 0.9302
+    },
+    {
+      "id": 3,
+      "first_t": 0.0,
+      "last_t": 8.067,
+      "first_frame": 0,
+      "last_frame": 121,
+      "frames": 121,
+      "mean_conf": 0.8469,
+      "max_conf": 0.9286
+    },
+    {
+      "id": 4,
+      "first_t": 0.0,
+      "last_t": 19.333,
+      "first_frame": 0,
+      "last_frame": 290,
+      "frames": 291,
+      "mean_conf": 0.8759,
+      "max_conf": 0.924
+    },
+    {
+      "id": 5,
+      "first_t": 0.0,
+      "last_t": 19.0,
+      "first_frame": 0,
+      "last_frame": 285,
+      "frames": 282,
+      "mean_conf": 0.7075,
+      "max_conf": 0.8983
+    },
+    {
+      "id": 6,
+      "first_t": 0.0,
+      "last_t": 25.933,
+      "first_frame": 0,
+      "last_frame": 389,
+      "frames": 276,
+      "mean_conf": 0.7897,
+      "max_conf": 0.9111
+    },
+    {
+      "id": 7,
+      "first_t": 0.0,
+      "last_t": 10.533,
+      "first_frame": 0,
+      "last_frame": 158,
+      "frames": 159,
+      "mean_conf": 0.8004,
+      "max_conf": 0.896
+    },
+    {
+      "id": 8,
+      "first_t": 0.0,
+      "last_t": 3.267,
+      "first_frame": 0,
+      "last_frame": 49,
+      "frames": 49,
+      "mean_conf": 0.6101,
+      "max_conf": 0.7634
+    },
+    {
+      "id": 9,
+      "first_t": 0.0,
+      "last_t": 3.2,
+      "first_frame": 0,
+      "last_frame": 48,
+      "frames": 49,
+      "mean_conf": 0.6564,
+      "max_conf": 0.8698
+    },
+    {
+      "id": 10,
+      "first_t": 0.0,
+      "last_t": 1.467,
+      "first_frame": 0,
+      "last_frame": 22,
+      "frames": 23,
+      "mean_conf": 0.5353,
+      "max_conf": 0.6717
+    },
+    {
+      "id": 11,
+      "first_t": 0.267,
+      "last_t": 59.933,
+      "first_frame": 4,
+      "last_frame": 899,
+      "frames": 475,
+      "mean_conf": 0.4942,
+      "max_conf": 0.8337
+    },
+    {
+      "id": 12,
+      "first_t": 0.667,
+      "last_t": 3.933,
+      "first_frame": 10,
+      "last_frame": 59,
+      "frames": 36,
+      "mean_conf": 0.4634,
+      "max_conf": 0.588
+    },
+    {
+      "id": 13,
+      "first_t": 1.067,
+      "last_t": 1.667,
+      "first_frame": 16,
+      "last_frame": 25,
+      "frames": 4,
+      "mean_conf": 0.4186,
+      "max_conf": 0.5057
+    },
+    {
+      "id": 14,
+      "first_t": 1.6,
+      "last_t": 3.533,
+      "first_frame": 24,
+      "last_frame": 53,
+      "frames": 6,
+      "mean_conf": 0.6482,
+      "max_conf": 0.863
+    },
+    {
+      "id": 15,
+      "first_t": 3.267,
+      "last_t": 14.667,
+      "first_frame": 49,
+      "last_frame": 220,
+      "frames": 172,
+      "mean_conf": 0.8031,
+      "max_conf": 0.9514
+    },
+    {
+      "id": 16,
+      "first_t": 3.333,
+      "last_t": 3.333,
+      "first_frame": 50,
+      "last_frame": 50,
+      "frames": 1,
+      "mean_conf": 0.4293,
+      "max_conf": 0.4293
+    },
+    {
+      "id": 17,
+      "first_t": 4.933,
+      "last_t": 59.933,
+      "first_frame": 74,
+      "last_frame": 899,
+      "frames": 825,
+      "mean_conf": 0.9166,
+      "max_conf": 0.9585
+    },
+    {
+      "id": 18,
+      "first_t": 9.267,
+      "last_t": 59.933,
+      "first_frame": 139,
+      "last_frame": 899,
+      "frames": 698,
+      "mean_conf": 0.6993,
+      "max_conf": 0.9284
+    },
+    {
+      "id": 19,
+      "first_t": 10.067,
+      "last_t": 59.933,
+      "first_frame": 151,
+      "last_frame": 899,
+      "frames": 749,
+      "mean_conf": 0.8091,
+      "max_conf": 0.9094
+    },
+    {
+      "id": 20,
+      "first_t": 10.2,
+      "last_t": 22.067,
+      "first_frame": 153,
+      "last_frame": 331,
+      "frames": 165,
+      "mean_conf": 0.6192,
+      "max_conf": 0.8026
+    },
+    {
+      "id": 21,
+      "first_t": 10.6,
+      "last_t": 12.533,
+      "first_frame": 159,
+      "last_frame": 188,
+      "frames": 30,
+      "mean_conf": 0.5944,
+      "max_conf": 0.7724
+    },
+    {
+      "id": 22,
+      "first_t": 12.8,
+      "last_t": 13.067,
+      "first_frame": 192,
+      "last_frame": 196,
+      "frames": 3,
+      "mean_conf": 0.4953,
+      "max_conf": 0.5114
+    },
+    {
+      "id": 23,
+      "first_t": 13.333,
+      "last_t": 59.933,
+      "first_frame": 200,
+      "last_frame": 899,
+      "frames": 643,
+      "mean_conf": 0.5637,
+      "max_conf": 0.8386
+    },
+    {
+      "id": 24,
+      "first_t": 14.0,
+      "last_t": 39.0,
+      "first_frame": 210,
+      "last_frame": 585,
+      "frames": 166,
+      "mean_conf": 0.4428,
+      "max_conf": 0.6898
+    },
+    {
+      "id": 25,
+      "first_t": 14.733,
+      "last_t": 15.933,
+      "first_frame": 221,
+      "last_frame": 239,
+      "frames": 19,
+      "mean_conf": 0.4831,
+      "max_conf": 0.7763
+    },
+    {
+      "id": 26,
+      "first_t": 14.8,
+      "last_t": 26.867,
+      "first_frame": 222,
+      "last_frame": 403,
+      "frames": 175,
+      "mean_conf": 0.679,
+      "max_conf": 0.8666
+    },
+    {
+      "id": 27,
+      "first_t": 14.933,
+      "last_t": 59.933,
+      "first_frame": 224,
+      "last_frame": 899,
+      "frames": 676,
+      "mean_conf": 0.8671,
+      "max_conf": 0.9298
+    },
+    {
+      "id": 28,
+      "first_t": 16.0,
+      "last_t": 17.933,
+      "first_frame": 240,
+      "last_frame": 269,
+      "frames": 26,
+      "mean_conf": 0.4338,
+      "max_conf": 0.4716
+    },
+    {
+      "id": 29,
+      "first_t": 16.067,
+      "last_t": 59.933,
+      "first_frame": 241,
+      "last_frame": 899,
+      "frames": 567,
+      "mean_conf": 0.5928,
+      "max_conf": 0.8566
+    },
+    {
+      "id": 30,
+      "first_t": 16.667,
+      "last_t": 18.4,
+      "first_frame": 250,
+      "last_frame": 276,
+      "frames": 25,
+      "mean_conf": 0.6231,
+      "max_conf": 0.753
+    },
+    {
+      "id": 31,
+      "first_t": 17.133,
+      "last_t": 59.933,
+      "first_frame": 257,
+      "last_frame": 899,
+      "frames": 642,
+      "mean_conf": 0.8619,
+      "max_conf": 0.9043
+    },
+    {
+      "id": 32,
+      "first_t": 17.667,
+      "last_t": 58.667,
+      "first_frame": 265,
+      "last_frame": 880,
+      "frames": 132,
+      "mean_conf": 0.4173,
+      "max_conf": 0.6017
+    },
+    {
+      "id": 33,
+      "first_t": 18.533,
+      "last_t": 19.4,
+      "first_frame": 278,
+      "last_frame": 291,
+      "frames": 11,
+      "mean_conf": 0.4624,
+      "max_conf": 0.5601
+    },
+    {
+      "id": 34,
+      "first_t": 19.133,
+      "last_t": 59.933,
+      "first_frame": 287,
+      "last_frame": 899,
+      "frames": 323,
+      "mean_conf": 0.4724,
+      "max_conf": 0.7613
+    },
+    {
+      "id": 35,
+      "first_t": 20.0,
+      "last_t": 59.933,
+      "first_frame": 300,
+      "last_frame": 899,
+      "frames": 435,
+      "mean_conf": 0.6628,
+      "max_conf": 0.8924
+    },
+    {
+      "id": 36,
+      "first_t": 21.6,
+      "last_t": 59.933,
+      "first_frame": 324,
+      "last_frame": 899,
+      "frames": 576,
+      "mean_conf": 0.871,
+      "max_conf": 0.9175
+    },
+    {
+      "id": 37,
+      "first_t": 21.933,
+      "last_t": 28.4,
+      "first_frame": 329,
+      "last_frame": 426,
+      "frames": 30,
+      "mean_conf": 0.4455,
+      "max_conf": 0.6492
+    },
+    {
+      "id": 38,
+      "first_t": 23.133,
+      "last_t": 23.267,
+      "first_frame": 347,
+      "last_frame": 349,
+      "frames": 3,
+      "mean_conf": 0.6443,
+      "max_conf": 0.7365
+    },
+    {
+      "id": 39,
+      "first_t": 24.133,
+      "last_t": 59.933,
+      "first_frame": 362,
+      "last_frame": 899,
+      "frames": 536,
+      "mean_conf": 0.6655,
+      "max_conf": 0.8868
+    },
+    {
+      "id": 40,
+      "first_t": 27.2,
+      "last_t": 59.933,
+      "first_frame": 408,
+      "last_frame": 899,
+      "frames": 492,
+      "mean_conf": 0.7943,
+      "max_conf": 0.9245
+    },
+    {
+      "id": 41,
+      "first_t": 27.4,
+      "last_t": 32.2,
+      "first_frame": 411,
+      "last_frame": 483,
+      "frames": 73,
+      "mean_conf": 0.6937,
+      "max_conf": 0.8542
+    },
+    {
+      "id": 42,
+      "first_t": 35.133,
+      "last_t": 59.933,
+      "first_frame": 527,
+      "last_frame": 899,
+      "frames": 277,
+      "mean_conf": 0.6212,
+      "max_conf": 0.7973
+    },
+    {
+      "id": 43,
+      "first_t": 46.933,
+      "last_t": 48.4,
+      "first_frame": 704,
+      "last_frame": 726,
+      "frames": 21,
+      "mean_conf": 0.4391,
+      "max_conf": 0.5111
+    }
+  ],
+  "files": {
+    "detections_csv": "outputs/WhatsApp_Video_2026-09-29_at_8_45_20_PM_2/20261011-170551_yolo11m/detections.csv",
+    "frame_counts_csv": "outputs/WhatsApp_Video_2026-09-29_at_8_45_20_PM_2/20261011-170551_yolo11m/frame_counts.csv",
+    "detections_json": "outputs/WhatsApp_Video_2026-09-29_at_8_45_20_PM_2/20261011-170551_yolo11m/detections.json"
+  }
+}

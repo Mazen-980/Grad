@@ -13,7 +13,11 @@ const S = {
   settings: null, summary: null, source: null,  // "job" | "run" | null
   jobId: null, poll: null, previewTimer: null, runDir: null,
   minTrackFrames: 5, activeTrack: null,
+  zones: null, zoneScope: null,   // zones of the selected video (zones.py format)
+  edit: null,                     // zone editor state {zones: [...], type, points: [...]}
 };
+const ZONE_COL = { pen: "rgba(90,200,90,", feed: "rgba(255,165,0,", water: "rgba(0,140,255," };
+const BEH = ["eating", "drinking", "lying", "walking", "standing"];
 
 // ---------------------------------------------------------------- helpers
 const fmt = (t) => {
@@ -52,8 +56,9 @@ function addFrames(frames) {
     for (const [id, conf] of fr.d) {
       if (id == null) continue;
       let tr = S.tracks.get(id);
-      if (!tr) { tr = { id, first_t: fr.t, last_t: fr.t, frames: 0, conf_sum: 0, raws: new Set() }; S.tracks.set(id, tr); }
+      if (!tr) { tr = { id, first_t: fr.t, last_t: fr.t, frames: 0, conf_sum: 0, raws: new Set(), beh: {} }; S.tracks.set(id, tr); }
       tr.last_t = fr.t; tr.frames++; tr.conf_sum += conf;
+      if (fr.b) { const k = fr.d.findIndex((x) => x[0] === id); const b = fr.b[k]; if (b) tr.beh[b] = (tr.beh[b] || 0) + 1; }
       const d = fr.d.find((x) => x[0] === id); if (d && d.length > 6 && d[6] != null) tr.raws.add(d[6]);
     }
   }
@@ -76,6 +81,38 @@ function videoRect() {
   const sc = Math.min(cw / vw, ch / vh);
   return { x: (cw - vw * sc) / 2, y: (ch - vh * sc) / 2, sc, vw, vh };
 }
+function toCanvas() {
+  // video-pixel (original resolution) -> canvas CSS pixels
+  const r = videoRect();
+  const sx = r.sc * (r.vw / ((S.meta && S.meta.width) || r.vw)), sy = r.sc * (r.vh / ((S.meta && S.meta.height) || r.vh));
+  return { r, sx, sy, f: (x, y) => [r.x + x * sx, r.y + y * sy], inv: (X, Y) => [(X - r.x) / sx, (Y - r.y) / sy] };
+}
+function zoneScale(z) {
+  const [iw, ih] = (z && z.image_size) || [0, 0];
+  const w = (S.meta && S.meta.width) || iw, h = (S.meta && S.meta.height) || ih;
+  return [iw ? w / iw : 1, ih ? h / ih : 1];
+}
+function drawZones(c, zones, extra) {
+  if (!zones) return;
+  const T = toCanvas(), [kx, ky] = zoneScale(zones);
+  for (const z of zones.zones || []) {
+    if (!z.points.length) continue;
+    c.beginPath();
+    z.points.forEach(([x, y], i) => { const [X, Y] = T.f(x * kx, y * ky); i ? c.lineTo(X, Y) : c.moveTo(X, Y); });
+    c.closePath();
+    const col = ZONE_COL[z.type] || "rgba(255,255,255,";
+    if (z.type !== "pen") { c.fillStyle = col + "0.18)"; c.fill(); }
+    c.strokeStyle = col + "0.9)"; c.lineWidth = 2; c.setLineDash(z.type === "pen" ? [6, 4] : []); c.stroke(); c.setLineDash([]);
+    const [lx, ly] = T.f(z.points[0][0] * kx, z.points[0][1] * ky);
+    c.font = "600 11px -apple-system, sans-serif"; c.fillStyle = col + "1)"; c.fillText(z.name || z.type, lx + 4, ly + 4);
+  }
+  if (extra && extra.points.length) {  // shape being drawn in the editor
+    c.beginPath();
+    extra.points.forEach(([x, y], i) => { const [X, Y] = T.f(x, y); i ? c.lineTo(X, Y) : c.moveTo(X, Y); });
+    c.strokeStyle = (ZONE_COL[extra.type] || "rgba(255,255,255,") + "1)"; c.lineWidth = 2; c.stroke();
+    for (const [x, y] of extra.points) { const [X, Y] = T.f(x, y); c.fillStyle = "#fff"; c.fillRect(X - 3, Y - 3, 6, 6); }
+  }
+}
 function drawOverlay(fr) {
   const dpr = window.devicePixelRatio || 1;
   const cw = canvas.clientWidth, ch = canvas.clientHeight;
@@ -84,17 +121,19 @@ function drawOverlay(fr) {
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cw, ch);
+  if ($("tZones").checked && !S.edit) drawZones(ctx, S.zones);
   if (!fr || !$("tOverlay").checked) return;
   const r = videoRect();
   // The metadata is in the original video's pixel space; the browser preview has the same frames.
   const sx = r.sc * (r.vw / ((S.meta && S.meta.width) || r.vw)), sy = r.sc * (r.vh / ((S.meta && S.meta.height) || r.vh));
   ctx.font = "600 12px -apple-system, Segoe UI, sans-serif"; ctx.textBaseline = "top";
-  for (const [id, conf, x1, y1, x2, y2] of fr.d) {
+  for (const [k, [id, conf, x1, y1, x2, y2]] of fr.d.entries()) {
     const X = r.x + x1 * sx, Y = r.y + y1 * sy, W = (x2 - x1) * sx, H = (y2 - y1) * sy;
     const col = idColor(id), active = S.activeTrack != null && S.activeTrack === id;
     ctx.lineWidth = active ? 4 : 2; ctx.strokeStyle = col; ctx.strokeRect(X, Y, W, H);
     if ($("tLabels").checked) {
-      const label = `${id != null ? "ID " + id : "cow"} · ${Math.round(conf * 100)}%`;
+      const beh = fr.b && fr.b[k] && fr.b[k] !== "standing" ? ` · ${fr.b[k]}` : "";
+      const label = `${id != null ? "ID " + id : "cow"} · ${Math.round(conf * 100)}%${beh}`;
       const tw = ctx.measureText(label).width + 8, ly = Math.max(0, Y - 17);
       ctx.fillStyle = col; ctx.fillRect(X, ly, tw, 17);
       ctx.fillStyle = "#151515"; ctx.fillText(label, X + 4, ly + 2.5);
@@ -124,6 +163,11 @@ function updateStats(force) {
 
   $("sVisible").textContent = fr ? fr.n : "–";
   $("sConf").textContent = fr && fr.d.length ? pct(fr.d.reduce((a, d) => a + d[1], 0) / fr.d.length) : "–";
+  if (fr && fr.b) {
+    $("sBeh").innerHTML = BEH.map((b) => `<span class="chip ${b}">${b}<b>${fr.b.filter((x) => x === b).length}</b></span>`).join("");
+  } else {
+    $("sBeh").textContent = has ? (S.summary && S.summary.behaviour === null ? "not computed for this run" : "–") : "–";
+  }
   const tracking = S.settings && S.settings.tracker !== "none";
   if (has && tracking) {
     let upto = 0, stable = 0;
@@ -200,7 +244,7 @@ function renderTracks() {
   const tracks = [...S.tracks.values()].sort((a, b) => a.id - b.id);
   if (!tracks.length) {
     const msg = !S.frames.length ? "No results yet." : (S.settings && S.settings.tracker === "none") ? "Tracking was disabled for this run." : "No cows detected.";
-    tb.innerHTML = `<tr><td colspan="7">${msg}</td></tr>`; return;
+    tb.innerHTML = `<tr><td colspan="10">${msg}</td></tr>`; return;
   }
   for (const tr of tracks) {
     const row = tb.insertRow(); row.dataset.id = tr.id;
@@ -208,9 +252,19 @@ function renderTracks() {
     row.innerHTML = `<td><span class="swatch" style="background:${idColor(tr.id)}"></span>${tr.id}</td>
       <td>${fmt(tr.first_t)}</td><td>${fmt(tr.last_t)}</td><td>${tr.frames}</td><td>${pct(tr.conf_sum / tr.frames)}</td>
       <td>${tr.raws.size > 1 ? [...tr.raws].sort((a, b) => a - b).join(" + ") : (tr.raws.size ? "–" : "")}</td>
+      ${["eating", "drinking", "lying"].map((b) => `<td>${tr.beh[b] ? fmt(tr.beh[b] * sampleDt()) : "–"}</td>`).join("")}
       <td><button class="btn">Show</button></td>`;
     row.querySelector("button").onclick = () => { S.activeTrack = tr.id; video.pause(); video.currentTime = tr.first_t + 0.001; };
   }
+}
+function sampleDt() { return ((S.settings && S.settings.stride) || 1) / ((S.meta && S.meta.fps) || 25); }
+function renderBehaviour() {
+  const el = $("behRow");
+  if (!S.frames.length || !S.frames.some((f) => f.b)) { el.innerHTML = ""; return; }
+  const tot = {}; for (const f of S.frames) for (const b of f.b || []) tot[b] = (tot[b] || 0) + 1;
+  const dt = sampleDt();
+  el.innerHTML = "<span>Behaviour, cow-minutes:</span>" + BEH.map((b) => `<span class="chip ${b}">${b}<b>${((tot[b] || 0) * dt / 60).toFixed(1)}</b></span>`).join("") +
+    `<span class="hint">${S.summary && S.summary.behaviour && !S.summary.behaviour.zones ? "no zones for this camera: eating/drinking off" : ""}</span>`;
 }
 function renderSummary(stats) {
   const el = $("summaryRow");
@@ -269,14 +323,15 @@ async function loadRun(runDir) {
   S.minTrackFrames = summary.settings.min_track_frames || 5;
   S.meta = { ...(S.meta || {}), ...summary.meta };
   addFrames(frames);
-  updateRunStats(summary.stats); renderTracks(); renderSummary(summary.stats); renderDownloads(summary.files); setSourceInfo();
+  updateRunStats(summary.stats); renderTracks(); renderSummary(summary.stats); renderBehaviour(); renderDownloads(summary.files); setSourceInfo();
   updateStats(true);
 }
 $("runSelect").onchange = (e) => { if (S.source === "job" && S.poll) return; loadRun(e.target.value); };
 
 // ---------------------------------------------------------------- video selection
 async function selectVideo(path) {
-  S.videoPath = path; resetData(); updateRunStats(null); renderTracks(); renderSummary(null); renderDownloads(null);
+  S.videoPath = path; resetData(); updateRunStats(null); renderTracks(); renderSummary(null); renderBehaviour(); renderDownloads(null);
+  closeEditor(); loadZones();
   const v = S.videos.find((x) => x.path === path);
   S.meta = v ? { ...v } : null;
   $("sFile").textContent = v ? v.name : "–";
@@ -307,8 +362,65 @@ const step = (dir) => { video.pause(); video.currentTime = Math.max(0, video.cur
 $("bBack").onclick = () => step(-1); $("bFwd").onclick = () => step(1);
 $("seek").oninput = (e) => { if (video.duration) video.currentTime = (e.target.value / 1000) * video.duration; };
 $("rate").onchange = (e) => (video.playbackRate = +e.target.value);
-$("tOverlay").onchange = $("tLabels").onchange = () => updateStats(true);
+$("tOverlay").onchange = $("tLabels").onchange = $("tZones").onchange = () => updateStats(true);
 $("videoSelect").onchange = (e) => selectVideo(e.target.value);
+
+// ---------------------------------------------------------------- zones + editor
+async function loadZones() {
+  S.zones = null; S.zoneScope = null;
+  if (!S.videoPath) return;
+  try { const r = await api(`/api/zones?video=${encodeURIComponent(S.videoPath)}`); S.zones = r.zones; S.zoneScope = r.scope; } catch (_) {}
+  updateStats(true);
+}
+const zc = $("zoneCanvas"), zctx = zc.getContext("2d");
+function drawEditor() {
+  if (!S.edit) return;
+  const dpr = window.devicePixelRatio || 1, cw = zc.clientWidth, ch = zc.clientHeight;
+  if (zc.width !== Math.round(cw * dpr)) { zc.width = Math.round(cw * dpr); zc.height = Math.round(ch * dpr); }
+  zctx.setTransform(dpr, 0, 0, dpr, 0, 0); zctx.clearRect(0, 0, cw, ch);
+  drawZones(zctx, { image_size: [S.meta.width, S.meta.height], zones: S.edit.zones }, { type: $("zType").value, points: S.edit.points });
+  const n = (t) => S.edit.zones.filter((z) => z.type === t).length;
+  $("zStatus").textContent = `Pen: ${n("pen")} · Feed troughs: ${n("feed")} · Water troughs: ${n("water")}` +
+    (S.edit.points.length ? ` · drawing ${S.edit.points.length} point(s)` : "") +
+    (S.zoneScope ? ` · currently saved for this ${S.zoneScope === "folder" ? "camera folder" : "video"}` : " · not saved yet");
+}
+function openEditor() {
+  if (!S.meta || !S.meta.width) return;
+  video.pause();
+  const [kx, ky] = zoneScale(S.zones);
+  S.edit = { zones: ((S.zones && S.zones.zones) || []).map((z) => ({ ...z, points: z.points.map(([x, y]) => [x * kx, y * ky]) })), points: [] };
+  $("zoneEditor").classList.remove("hidden"); zc.classList.remove("hidden"); drawEditor(); updateStats(true);
+}
+function closeEditor() { S.edit = null; $("zoneEditor").classList.add("hidden"); zc.classList.add("hidden"); updateStats(true); }
+zc.addEventListener("click", (e) => {
+  if (!S.edit) return;
+  const b = zc.getBoundingClientRect(), [x, y] = toCanvas().inv(e.clientX - b.left, e.clientY - b.top);
+  if (x < 0 || y < 0 || x > S.meta.width || y > S.meta.height) return;
+  S.edit.points.push([Math.round(x), Math.round(y)]); drawEditor();
+});
+$("bEditZones").onclick = () => (S.edit ? closeEditor() : openEditor());
+$("zType").onchange = drawEditor;
+$("zUndo").onclick = () => { if (S.edit) { S.edit.points.pop(); drawEditor(); } };
+$("zFinish").onclick = () => {
+  if (!S.edit || S.edit.points.length < 3) { $("zStatus").textContent = "A zone needs at least 3 corners."; return; }
+  const t = $("zType").value;
+  if (t === "pen") S.edit.zones = S.edit.zones.filter((z) => z.type !== "pen");  // one pen outline
+  const name = { pen: "Pen", feed: "Feed trough", water: "Water trough" }[t];
+  S.edit.zones.push({ type: t, name, points: S.edit.points }); S.edit.points = []; drawEditor();
+};
+$("zClearType").onclick = () => { if (S.edit) { const t = $("zType").value; S.edit.zones = S.edit.zones.filter((z) => z.type !== t); drawEditor(); } };
+$("zCancel").onclick = closeEditor;
+async function saveZones(scope) {
+  const data = { image_size: [S.meta.width, S.meta.height], zones: S.edit.zones };
+  try {
+    await api("/api/zones", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ video: S.videoPath, scope, data }) });
+    await loadZones(); closeEditor();
+    banner(`Zones saved for this ${scope === "folder" ? "camera folder" : "video"}. Run detection again to apply them to behaviours and counts.`);
+  } catch (e) { $("zStatus").textContent = "Save failed: " + e.message; }
+}
+$("zSaveFolder").onclick = () => saveZones("folder");
+$("zSaveVideo").onclick = () => saveZones("video");
+window.addEventListener("resize", drawEditor);
 
 // ---------------------------------------------------------------- processing jobs
 function readSettings() {
@@ -317,7 +429,8 @@ function readSettings() {
     conf: +$("pConf").value, iou: +$("pIou").value, imgsz: +$("pImgsz").value,
     stride: Math.max(1, +$("pStride").value || 1), export_video: $("pExport").checked,
     track_memory_s: +$("pMemory").value || 8, relink: $("pRelink").checked,
-    max_seconds: +$("pMax").value || null,
+    max_seconds: +$("pMax").value || null, start_seconds: +$("pStart").value || 0,
+    behaviours: $("pBehaviour").checked,
   };
 }
 $("pConf").oninput = (e) => ($("oConf").textContent = (+e.target.value).toFixed(2));

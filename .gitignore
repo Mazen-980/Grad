@@ -14,3 +14,12 @@ outputs/**/annotated.mp4
 # OS / local tool files
 .DS_Store
 .claude/
+
+# Hikvision/EZVIZ day recordings: 256 MB chunks (over GitHub's 100 MB limit); keep locally
+15-10-first day.zip
+videos/15-10-first_day/
+outputs/hiv*/
+
+# Generated training material (crops from farm footage)
+data/
+trackers/cow_*_c*_b*.yaml

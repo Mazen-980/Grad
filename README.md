@@ -118,3 +118,42 @@ not enough; you need *identification* against a registered herd list:
   metric-learning model (e.g. a ResNet/ViT embedding with triplet loss), and match each track against
   the herd gallery. This does not work well for solid black cows; use tags for those.
 * **Fixed cameras with a counting line** at gates or feed alleys, instead of handheld video.
+
+## Behaviours (eating, drinking, lying, walking)
+
+Behaviours are computed per cow after detection, tracking and re-linking (`behaviour.py`). They use the
+camera's **zones** (`zones.py`, saved in `zones/`), drawn once per camera in the dashboard
+(**Edit zones** → draw → **Save for this camera**):
+
+| Zone | Use |
+|---|---|
+| Pen | Only cows whose feet are inside are counted (removes the neighbouring pen) |
+| Feed trough | Eating = standing at the trough (body in the zone **and** feet close to it) for ≥ 3 s, not walking |
+| Water trough | Drinking = same, for ≥ 2 s |
+
+* **Lying**: box height compared with the expected height of a *standing* cow at the same image row
+  (`standing_height` in the zones file, fitted from ~14,000 boxes of this camera). Lying cows measure
+  0.53–0.66 of standing height and standing cows 1.0–1.16; lying = rolling median below 0.72. Skipped for
+  cows cut off at the frame edge, hidden behind another cow, at the feed trough, or right under the camera.
+* **Walking**: box centre moving faster than 0.25 body-heights per second (fixed cameras only).
+* Output: label on every box (dashboard + annotated MP4), `behaviour` column in `detections.csv`,
+  per-frame counts in `frame_counts.csv`, seconds per behaviour per cow in `summary.json`.
+
+Tested on the 15 Oct camera (`videos/15-10-first_day`, zones already set):
+
+| Clip | Result |
+|---|---|
+| 17:30 feeding (2 min) | Cows detected at the feed wall → eating; 1.3% of cow-time falsely "lying" (cows partly hidden in the crowd) |
+| 19:59–20:09 night (10 min) | Detected lying cows correctly flagged (ratio 0.53–0.66); a cow lying with its head raised (~0.85) is missed |
+
+**Limitations:**
+* The general-purpose detector misses or merges cows in the packed feeding line (once 2 of ~8 found),
+  and misses many lying cows at night (at 20:06 none of ~6 detected). Behaviours can only be given to
+  detected cows, so eating and lying time are **under-counted**.
+* "Eating"/"drinking" mean *at the trough*; the camera cannot see swallowing.
+* The water-trough zone was placed from the night footage (the trough is washed out by sun in the day); check it.
+
+**Next step for accuracy:** fine-tune the detector on frames from this camera (crowded feeding line,
+lying cows at night). `train_posture.py` + `posture.py` are ready for a lying/standing classifier, but
+this footage has too few lying cows (essentially one individual) to train one honestly; record nights
+or midday rest periods first. 1,500 candidate crops are in `data/posture/crops/`.

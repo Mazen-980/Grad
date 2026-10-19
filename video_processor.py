@@ -30,15 +30,18 @@ from typing import Callable, Dict, List, Optional
 import cv2
 import numpy as np
 
+from behaviour import BEHAVIOURS, label_behaviours, track_behaviour_seconds
 from detector import DEFAULT_MODEL, CowDetector, Detection
+from posture import PostureClassifier, crop_box
 from relink import apply_mapping, build_tracklets, compute_embeddings, relink, split_switches
 from tracker import TrackRegistry, tracker_config_path
+from zones import ZoneSet, load_zones
 
 PROJECT_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = PROJECT_DIR / "outputs"
 PREVIEW_DIR = OUTPUT_DIR / "previews"
 VIDEO_EXTS = {".mp4", ".avi", ".mov", ".mkv", ".m4v", ".webm", ".wmv", ".flv", ".mpg", ".mpeg", ".3gp", ".ts"}
-SKIP_DIRS = {".venv", "venv", "outputs", "models", "node_modules", "__pycache__", "static", "trackers"}
+SKIP_DIRS = {".venv", "venv", "outputs", "models", "node_modules", "__pycache__", "static", "trackers", "zones", "data"}
 BROWSER_CODECS = {"h264", "avc1", "vp80", "vp90", "av01"}
 
 
@@ -138,8 +141,19 @@ def playable_path(path: Path) -> Path:
     if not out.exists():
         PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
         tmp = out.with_suffix(".tmp.mp4")
-        subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(path), "-c:v", "libx264", "-preset", "veryfast",
-                        "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", str(tmp)], check=True)
+        # Preview only: cap the width at 1280 px (the dashboard overlay rescales boxes to the
+        # preview size). Prefer the macOS hardware encoder; long 3 MP CCTV recordings would
+        # otherwise take a very long time with libx264.
+        scale = ["-vf", "scale='min(1280,iw)':-2"]
+        encoders = [["-c:v", "h264_videotoolbox", "-b:v", "1200k"],
+                    ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"]]
+        for enc in encoders:
+            r = subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(path), *scale, *enc, "-pix_fmt", "yuv420p",
+                                "-movflags", "+faststart", "-an", str(tmp)])
+            if r.returncode == 0:
+                break
+        else:
+            raise RuntimeError("ffmpeg could not create a browser preview")
         tmp.rename(out)
     return out
 
@@ -155,16 +169,32 @@ def id_color(track_id: Optional[int]):
     return int(b), int(g), int(r)
 
 
-def annotate(frame: np.ndarray, dets: List[Detection], show_count: bool = True) -> np.ndarray:
+ZONE_COLORS = {"pen": (90, 200, 90), "feed": (0, 165, 255), "water": (255, 140, 0)}
+
+
+def draw_zones(img: np.ndarray, zones: Optional[ZoneSet]) -> None:
+    if zones is None:
+        return
+    th = max(1, round(img.shape[0] / 500))
+    for t, polys in zones.polys.items():
+        for p in polys:
+            cv2.polylines(img, [p.astype(np.int32)], True, ZONE_COLORS[t], th, cv2.LINE_AA)
+
+
+def annotate(frame: np.ndarray, dets: List[Detection], show_count: bool = True,
+             behaviours: Optional[List[str]] = None, zones: Optional[ZoneSet] = None) -> np.ndarray:
     out = frame.copy()
+    draw_zones(out, zones)
     h = out.shape[0]
     th = max(1, round(h / 400))
     fs = max(0.45, h / 1400)
-    for d in dets:
+    for k, d in enumerate(dets):
         c = id_color(d.track_id)
         p1, p2 = (int(d.x1), int(d.y1)), (int(d.x2), int(d.y2))
         cv2.rectangle(out, p1, p2, c, th + 1)
         label = (f"ID {d.track_id} " if d.track_id is not None else "cow ") + f"{d.confidence * 100:.0f}%"
+        if behaviours and k < len(behaviours):
+            label += f" {behaviours[k]}"
         (tw, tht), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, fs, th)
         y = max(p1[1], tht + 6)
         cv2.rectangle(out, (p1[0], y - tht - 6), (p1[0] + tw + 6, y), c, -1)
@@ -220,7 +250,9 @@ class ProcessingSettings:
     device: str = "auto"
     export_video: bool = True
     min_track_frames: int = 5
-    max_seconds: Optional[float] = None  # process only the first N seconds (quick tests)
+    max_seconds: Optional[float] = None  # process only N seconds (quick tests)
+    start_seconds: float = 0.0  # start processing this far into the video
+    behaviours: bool = True    # zones (pen/feed/water) + posture model -> behaviour labels
 
 
 def _fmt_ts(t: float) -> str:
@@ -250,8 +282,10 @@ class VideoJob:
         self.meta: dict = {}
         self.frames: List[dict] = []  # {"f", "t", "n", "d": [[id, conf, x1, y1, x2, y2], ...]}
         self.registry = TrackRegistry(settings.min_track_frames)
-        self.frames_read = 0
+        self.frames_read = 0      # frames read since start_frame
         self.total_frames = 0
+        self.start_frame = 0
+        self.end_frame = 0
         self.proc_fps = 0.0
         self.infer_ms = 0.0
         self.started = None
@@ -259,6 +293,9 @@ class VideoJob:
         self.preview_jpeg: Optional[bytes] = None
         self.phase_progress = 0.0  # progress of the post-processing phases
         self.relink_report: Optional[dict] = None
+        self.aux: Dict[int, List[list]] = {}   # frame -> [[feed_frac, water_frac, p_lying], ...]
+        self.zones: Optional[ZoneSet] = None
+        self.behaviour_totals: Optional[dict] = None
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self.lock = threading.Lock()
@@ -305,37 +342,78 @@ class VideoJob:
             if not self.meta.get("readable"):
                 raise RuntimeError(f"Cannot read video: {self.meta.get('error')}")
             fps = self.meta["fps"]
-            self.total_frames = self.meta["frames"] or 0
+            n_all = self.meta["frames"] or 0
+            self.start_frame = max(0, min(int(s.start_seconds * fps), max(n_all - 1, 0)))
+            self.total_frames = max(n_all - self.start_frame, 0)
             if s.max_seconds:
                 self.total_frames = min(self.total_frames or 10**9, int(s.max_seconds * fps))
+            self.end_frame = self.start_frame + self.total_frames
 
             # Tracker memory is given in seconds; the tracker counts updates (= processed frames).
             buffer_updates = max(30, int(round(s.track_memory_s * fps / max(1, s.stride))))
             det = CowDetector(s.model, s.device, s.conf, s.iou, s.imgsz,
                               tracker_config_path(s.tracker, s.conf, buffer_updates))
             self.meta.update(device=det.device, cow_classes=list(det.class_names.values()))
+            posture = None
+            if s.behaviours:
+                zdata, zscope = load_zones(self.video_rel)
+                if zdata:
+                    self.zones = ZoneSet(zdata, (self.meta["width"], self.meta["height"]))
+                    self.meta["zones"] = {"scope": zscope, "data": zdata}
+                if PostureClassifier.available():
+                    posture = PostureClassifier(device=s.device)
+                self.meta["posture_model"] = posture is not None
             self.run_dir.mkdir(parents=True, exist_ok=True)
 
             cap = cv2.VideoCapture(str(self.video))
+            if self.start_frame:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, self.start_frame)
             self.status, self.started = "running", time.time()
             infer_times: List[float] = []
-            idx = -1
+            idx = self.start_frame - 1
             while not self._stop.is_set():
                 idx += 1
-                if s.max_seconds and idx >= self.total_frames:
+                if s.max_seconds and idx >= self.end_frame:
                     break
-                if idx % max(1, s.stride):
+                if (idx - self.start_frame) % max(1, s.stride):
                     if not cap.grab():
                         break
-                    self.frames_read = idx + 1
+                    self.frames_read = idx + 1 - self.start_frame
                     continue
                 ok, frame = cap.read()
                 if not ok or frame is None:
                     break
-                self.frames_read = idx + 1
+                self.frames_read = idx + 1 - self.start_frame
                 t = idx / fps
                 res = det.process(frame)
                 infer_times.append(res.inference_ms)
+                if self.zones is not None and self.zones.has_pen:  # ignore cows outside this pen
+                    res.detections = [d for d in res.detections if self.zones.in_pen((d.x1, d.y1, d.x2, d.y2))]
+                if s.behaviours:
+                    boxes = [(d.x1, d.y1, d.x2, d.y2) for d in res.detections]
+                    pl: List[Optional[float]] = [None] * len(boxes)
+                    if posture is not None and boxes:
+                        crops = [crop_box(frame, b) for b in boxes]
+                        ok_i = [i for i, c in enumerate(crops) if c is not None]
+                        for i, p in zip(ok_i, posture.p_lying([crops[i] for i in ok_i])):
+                            pl[i] = round(p, 3)
+                    z = self.zones
+                    def occluded(i):
+                        # feet point hidden behind another cow whose box reaches lower (it stands in front):
+                        # the visible box is cut short, so its height says nothing about posture
+                        fx, fy = (boxes[i][0] + boxes[i][2]) / 2, boxes[i][3]
+                        return any(j != i and o[0] <= fx <= o[2] and o[1] <= fy < o[3] - 5
+                                   for j, o in enumerate(boxes))
+
+                    def ratio(i):
+                        if not z or occluded(i):
+                            return None
+                        r = z.height_ratio(boxes[i])
+                        return None if r is None else round(r, 3)
+
+                    self.aux[idx] = [[round(z.at_zone(b, "feed"), 3) if z else 0.0,
+                                      round(z.at_zone(b, "water"), 3) if z else 0.0, pl[i], ratio(i)]
+                                     for i, b in enumerate(boxes)]
                 rec = {"f": idx, "t": round(t, 4), "n": res.count, "d": [d.as_list() for d in res.detections]}
                 with self.lock:
                     self.frames.append(rec)
@@ -344,7 +422,7 @@ class VideoJob:
                 self.proc_fps = len(self.frames) / max(self.elapsed, 1e-6)
                 self.infer_ms = float(np.mean(infer_times[-50:]))
                 if len(self.frames) % 3 == 1:
-                    small = annotate(frame, res.detections)
+                    small = annotate(frame, res.detections, zones=self.zones)
                     scale = 640 / small.shape[1]
                     small = cv2.resize(small, (640, int(small.shape[0] * scale)))
                     self.preview_jpeg = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 75])[1].tobytes()
@@ -359,6 +437,9 @@ class VideoJob:
             else:
                 if s.relink and s.tracker != "none" and self.frames:
                     self._relink(fps)
+                if s.behaviours and self.frames and (self.zones is not None or posture is not None):
+                    with self.lock:
+                        self.behaviour_totals = label_behaviours(self.frames, self.aux, self.zones is not None)
                 if s.export_video and self.frames:
                     self._export_video(fps)
                 final = "stopped" if self._stop.is_set() else "done"
@@ -394,9 +475,11 @@ class VideoJob:
         self.status, self.phase_progress = "exporting", 0.0
         writer = AnnotatedWriter(self.run_dir / "annotated.mp4", self.meta["width"], self.meta["height"], fps)
         cap = cv2.VideoCapture(str(self.video))
-        recs, j, dets = self.frames, -1, []
+        if self.start_frame:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, self.start_frame)
+        recs, j, dets, labels = self.frames, -1, [], None
         try:
-            for idx in range(self.frames_read):
+            for idx in range(self.start_frame, self.start_frame + self.frames_read):
                 if self._stop.is_set():
                     break
                 ok, frame = cap.read()
@@ -405,8 +488,9 @@ class VideoJob:
                 while j + 1 < len(recs) and recs[j + 1]["f"] <= idx:
                     j += 1
                     dets = [Detection(d[2], d[3], d[4], d[5], d[1], d[0]) for d in recs[j]["d"]]
-                writer.write(annotate(frame, dets))
-                self.phase_progress = (idx + 1) / max(self.frames_read, 1)
+                    labels = recs[j].get("b")
+                writer.write(annotate(frame, dets, behaviours=labels if j >= 0 else None, zones=self.zones))
+                self.phase_progress = (idx + 1 - self.start_frame) / max(self.frames_read, 1)
         finally:
             cap.release()
             writer.close()
@@ -438,27 +522,52 @@ class VideoJob:
                 "elapsed_s": round(self.elapsed, 1),
             },
             "relink": self.relink_report,
-            "tracks": self.registry.to_list(),
+            "behaviour": self._behaviour_summary(),
+            "tracks": self._tracks_with_behaviour(),
             "files": files,
         }
+
+    def _sample_dt(self) -> float:
+        return max(1, self.settings.stride) / max(self.meta.get("fps") or 25.0, 1e-6)
+
+    def _behaviour_summary(self) -> Optional[dict]:
+        if self.behaviour_totals is None:
+            return None
+        dt_ = self._sample_dt()
+        return {"cow_seconds": {b: round(n * dt_, 1) for b, n in self.behaviour_totals.items()},
+                "zones": bool(self.zones), "posture_model": bool(self.meta.get("posture_model")),
+                "note": "eating/drinking = standing in the feed/water zone for a few seconds; "
+                        "lying needs the posture model (models/posture_cls.pt)."}
+
+    def _tracks_with_behaviour(self) -> List[dict]:
+        tracks = self.registry.to_list()
+        if self.behaviour_totals is None:
+            return tracks
+        secs = track_behaviour_seconds(self.frames, self._sample_dt())
+        for t in tracks:
+            t["behaviour_s"] = secs.get(t["id"], {})
+        return tracks
 
     def write_outputs(self):
         self.run_dir.mkdir(parents=True, exist_ok=True)
         with open(self.run_dir / "detections.csv", "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["video", "frame", "timestamp_s", "timestamp", "track_id", "confidence",
-                        "x1", "y1", "x2", "y2", "width", "height", "raw_track_id"])
+                        "x1", "y1", "x2", "y2", "width", "height", "raw_track_id", "behaviour"])
             for fr in self.frames:
-                for d in fr["d"]:
+                labels = fr.get("b") or [""] * len(fr["d"])
+                for d, lab in zip(fr["d"], labels):
                     tid, c, x1, y1, x2, y2 = d[:6]
                     raw = d[6] if len(d) > 6 else tid
                     w.writerow([self.video.name, fr["f"], fr["t"], _fmt_ts(fr["t"]), "" if tid is None else tid,
-                                c, x1, y1, x2, y2, round(x2 - x1, 1), round(y2 - y1, 1), "" if raw is None else raw])
+                                c, x1, y1, x2, y2, round(x2 - x1, 1), round(y2 - y1, 1), "" if raw is None else raw,
+                                lab])
         with open(self.run_dir / "frame_counts.csv", "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["frame", "timestamp_s", "timestamp", "visible_cows"])
+            w.writerow(["frame", "timestamp_s", "timestamp", "visible_cows", *BEHAVIOURS])
             for fr in self.frames:
-                w.writerow([fr["f"], fr["t"], _fmt_ts(fr["t"]), fr["n"]])
+                b = fr.get("b") or []
+                w.writerow([fr["f"], fr["t"], _fmt_ts(fr["t"]), fr["n"], *[b.count(k) for k in BEHAVIOURS]])
         (self.run_dir / "detections.json").write_text(json.dumps({"frames": self.frames}, separators=(",", ":")))
         (self.run_dir / "summary.json").write_text(json.dumps(self.summary(), indent=2))
 
@@ -493,6 +602,8 @@ def main():
     ap.add_argument("--device", default="auto")
     ap.add_argument("--no-video", action="store_true", help="Skip annotated video export")
     ap.add_argument("--max-seconds", type=float, default=None)
+    ap.add_argument("--start-seconds", type=float, default=0.0)
+    ap.add_argument("--no-behaviour", action="store_true", help="Skip zones/posture/behaviour labelling")
     a = ap.parse_args()
 
     extract_archives()
@@ -503,7 +614,8 @@ def main():
                   f"{info.get('duration')}s {info.get('codec')} {'' if info['readable'] else info['error']}")
         return
     s = ProcessingSettings(a.model, a.conf, a.iou, a.imgsz, a.stride, a.tracker, a.track_memory, not a.no_relink,
-                           a.device, not a.no_video, max_seconds=a.max_seconds)
+                           a.device, not a.no_video, max_seconds=a.max_seconds, behaviours=not a.no_behaviour,
+                           start_seconds=a.start_seconds)
     last = [0.0]
 
     def prog(job: VideoJob):
@@ -517,6 +629,8 @@ def main():
     print(json.dumps(job.summary()["stats"], indent=2))
     if job.relink_report:
         print("relink:", job.relink_report)
+    if job.behaviour_totals is not None:
+        print("behaviour (cow-seconds):", job.summary()["behaviour"]["cow_seconds"])
     print("status:", job.status, job.error or "", "->", job.run_dir)
 
 

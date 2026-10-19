@@ -130,7 +130,10 @@ def compute_embeddings(video_path: Path, tracklets: Dict[int, Tracklet], per_tra
     crop_frames: Dict[int, List[int]] = {tid: [] for tid in tracklets}
     cap = cv2.VideoCapture(str(video_path))
     last = max(wanted) if wanted else -1
-    idx = -1
+    first = min(wanted) if wanted else 0
+    if first > 0:  # runs that start partway through a video
+        cap.set(cv2.CAP_PROP_POS_FRAMES, first)
+    idx = first - 1
     while idx < last:
         idx += 1
         if idx not in wanted:

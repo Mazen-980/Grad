@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from detector import DEFAULT_MODEL, list_models, pick_device
+from zones import ZONE_TYPES, delete_zones, load_zones, save_zones
 from video_processor import (OUTPUT_DIR, PROJECT_DIR, ProcessingSettings, VideoJob, discover_videos,
                              extract_archives, list_runs, playable_path, probe_video)
 
@@ -87,6 +88,8 @@ class JobRequest(BaseModel):
     relink: bool = True
     export_video: bool = True
     max_seconds: Optional[float] = None
+    start_seconds: float = 0.0
+    behaviours: bool = True
 
 
 @app.post("/api/jobs")
@@ -100,7 +103,8 @@ def start_job(req: JobRequest):
                            stride=max(1, int(req.stride)), tracker=req.tracker,
                            track_memory_s=min(max(float(req.track_memory_s), 1.0), 120.0), relink=req.relink,
                            export_video=req.export_video,
-                           max_seconds=req.max_seconds or None)
+                           max_seconds=req.max_seconds or None, start_seconds=max(0.0, req.start_seconds or 0.0),
+                           behaviours=req.behaviours)
     job = VideoJob(req.video, s).start()
     JOBS[job.id] = job
     return {"id": job.id}
@@ -129,6 +133,38 @@ def job_preview(job_id: str):
     if not jpg:
         return Response(status_code=204)
     return Response(jpg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/zones")
+def get_zones(video: str):
+    _video_file(video)
+    data, scope = load_zones(video)
+    return {"zones": data, "scope": scope, "types": ZONE_TYPES}
+
+
+class ZonesRequest(BaseModel):
+    video: str
+    scope: str = "folder"  # folder = every video from this camera folder; video = only this file
+    data: dict
+
+
+@app.put("/api/zones")
+def put_zones(req: ZonesRequest):
+    _video_file(req.video)
+    if req.scope not in ("folder", "video"):
+        raise HTTPException(400, "scope must be 'folder' or 'video'")
+    old, _ = load_zones(req.video)
+    data = dict(req.data)
+    if old and old.get("standing_height") and "standing_height" not in data:
+        data["standing_height"] = old["standing_height"]  # keep the camera calibration
+    p = save_zones(req.video, data, req.scope)
+    return {"ok": True, "file": str(p.relative_to(PROJECT_DIR))}
+
+
+@app.delete("/api/zones")
+def del_zones(video: str, scope: str):
+    _video_file(video)
+    return {"deleted": delete_zones(video, scope)}
 
 
 @app.get("/api/active")

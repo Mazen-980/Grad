@@ -31,6 +31,8 @@
       <div class="toggles">
         <label class="switch"><input type="checkbox" id="tOverlay" checked><span>Overlays</span></label>
         <label class="switch"><input type="checkbox" id="tLabels" checked><span>Labels</span></label>
+        <label class="switch"><input type="checkbox" id="tZones" checked><span>Zones</span></label>
+        <button id="bEditZones" class="btn ghost" title="Draw the pen, feed trough and water trough">Edit zones</button>
         <select id="rate" title="Playback speed">
           <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
           <option value="1" selected>1×</option><option value="2">2×</option>
@@ -40,6 +42,7 @@
     <div class="stage" id="stage">
       <video id="video" controls playsinline preload="metadata"></video>
       <canvas id="overlay"></canvas>
+      <canvas id="zoneCanvas" class="hidden"></canvas>
       <div id="stageMsg" class="stage-msg hidden"></div>
       <div id="frameBadge" class="frame-badge hidden"></div>
     </div>
@@ -49,6 +52,23 @@
       <button id="bFwd" class="btn ghost" title="Forward one frame">frame ⟩</button>
       <input type="range" id="seek" min="0" max="1000" value="0" step="1">
       <span id="timeLbl" class="mono">00:00.0 / 00:00.0</span>
+    </div>
+    <div id="zoneEditor" class="zone-editor hidden">
+      <div class="ze-row">
+        <strong>Zone editor</strong>
+        <label>Draw <select id="zType"><option value="pen">Pen outline</option><option value="feed">Feed trough</option><option value="water">Water trough</option></select></label>
+        <span class="hint">Click on the video to add corners, then “Finish shape”.</span>
+      </div>
+      <div class="ze-row">
+        <button id="zFinish" class="btn">Finish shape</button>
+        <button id="zUndo" class="btn ghost">Undo point</button>
+        <button id="zClearType" class="btn ghost">Remove all of this type</button>
+        <span class="ze-sep"></span>
+        <button id="zSaveFolder" class="btn primary" title="Applies to every video in this folder (same camera)">Save for this camera</button>
+        <button id="zSaveVideo" class="btn" title="Only this video file, e.g. after the camera was moved">Save for this video only</button>
+        <button id="zCancel" class="btn ghost">Close</button>
+      </div>
+      <div class="ze-row hint" id="zStatus"></div>
     </div>
     <p class="source-note" id="sourceNote">No detections loaded for this video yet — run detection or pick a previous run.</p>
   </section>
@@ -61,6 +81,7 @@
       <div class="tile big"><div class="lbl">Unique track IDs <span class="hint" title="IDs seen up to the playhead / whole video. IDs can change after occlusion or re-entry, so this over-counts real animals.">ⓘ</span></div><div class="val" id="sUnique">–</div><div class="foot" id="sStable"></div></div>
       <div class="tile"><div class="lbl">Avg confidence (frame)</div><div class="val" id="sConf">–</div><div class="foot" id="sConfAll"></div></div>
       <div class="tile"><div class="lbl">Processing speed</div><div class="val" id="sFps">–</div><div class="foot" id="sInfer"></div></div>
+      <div class="tile wide"><div class="lbl">Behaviour now <span class="hint" title="Eating/drinking = standing at the feed/water trough zone for a few seconds. Lying = box much shorter than a standing cow at the same spot. See README.">ⓘ</span></div><div class="beh-chips" id="sBeh">–</div></div>
       <div class="tile wide"><div class="lbl">File</div><div class="val small" id="sFile">–</div><div class="foot" id="sMeta"></div></div>
       <div class="tile wide"><div class="lbl">Position / duration</div><div class="val small mono" id="sPos">–</div></div>
     </div>
@@ -79,9 +100,11 @@
       <label>IoU (NMS) <output id="oIou">0.50</output><input type="range" id="pIou" min="0.2" max="0.9" step="0.05" value="0.5"></label>
       <label>Image size<select id="pImgsz"><option>640</option><option selected>960</option><option>1280</option></select></label>
       <label>Process every Nth frame<input type="number" id="pStride" min="1" max="30" value="1"></label>
-      <label>Limit to first N seconds<input type="number" id="pMax" min="0" step="5" placeholder="whole video"></label>
+      <label>Start at (seconds)<input type="number" id="pStart" min="0" step="10" value="0"></label>
+      <label>Process N seconds<input type="number" id="pMax" min="0" step="5" placeholder="to the end"></label>
       <label>ID memory (seconds a hidden cow keeps its ID)<input type="number" id="pMemory" min="1" max="120" value="8"></label>
       <label class="check"><input type="checkbox" id="pRelink" checked> Re-link broken IDs after processing (and split ID switches)</label>
+      <label class="check"><input type="checkbox" id="pBehaviour" checked> Detect behaviours (eating, drinking, lying, walking) using this camera's zones</label>
       <label class="check"><input type="checkbox" id="pExport" checked> Export annotated video</label>
     </div>
     <div class="actions">
@@ -107,17 +130,18 @@
       <canvas id="chart" height="180"></canvas>
     </div>
     <div class="summary-row" id="summaryRow"></div>
+    <div class="summary-row" id="behRow"></div>
     <div class="downloads" id="downloads"></div>
     <div class="table-wrap">
       <table id="tracksTbl">
-        <thead><tr><th>ID</th><th>First seen</th><th>Last seen</th><th>Frames</th><th>Mean conf.</th><th title="Raw tracker IDs joined into this ID by re-linking">Fragments</th><th></th></tr></thead>
+        <thead><tr><th>ID</th><th>First seen</th><th>Last seen</th><th>Frames</th><th>Mean conf.</th><th title="Raw tracker IDs joined into this ID by re-linking">Fragments</th><th>Eating</th><th>Drinking</th><th>Lying</th><th></th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
   </section>
 </main>
 
-<footer>All boxes, counts and confidences shown come from real YOLO model inference on the selected video. Nothing is simulated.</footer>
+<footer>All boxes, counts and confidences come from real YOLO model inference on the selected video. Behaviours are rule-based on top of those detections (trough zones, box height, movement); nothing is simulated.</footer>
 <script src="/static/app.js"></script>
 </body>
 </html>
